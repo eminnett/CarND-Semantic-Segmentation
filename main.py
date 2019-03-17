@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os.path
 import tensorflow as tf
+import numpy as np
 import helper
 import warnings
 from distutils.version import LooseVersion
@@ -165,7 +166,7 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
         for X_batch, gt_batch in get_batches_fn(batch_size):
             feed_dict = {input_image: X_batch, correct_label: gt_batch, keep_prob: 0.5, learning_rate: 0.001}
             loss, _ = sess.run([cross_entropy_loss, train_op], feed_dict=feed_dict)
-            total_loss += loss
+            total_loss += np.mean(loss)
         print("Epoch: {} --- Total Loss: {:.5f}".format(epoch, total_loss))
 tests.test_train_nn(train_nn)
 
@@ -187,7 +188,7 @@ def run():
     learning_rate = tf.placeholder(tf.float32)
     correct_label = tf.placeholder(tf.float32, [None, None, None, num_classes])
     
-    num_epochs = 50
+    num_epochs = 30
     batch_size = 8
     
     opts = tf.GPUOptions(allow_growth=True)
