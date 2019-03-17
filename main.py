@@ -54,15 +54,69 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     :param num_classes: Number of classes to classify
     :return: The Tensor for the last layer of output
     """
-    l_3_size = vgg_layer3_out.get_shape().as_list()[-1]
-    l_4_size = vgg_layer4_out.get_shape().as_list()[-1]
+    l3_size = vgg_layer3_out.get_shape().as_list()[-1]
+    l4_size = vgg_layer4_out.get_shape().as_list()[-1]
 
-    fcn8 = tf.layers.conv2d(vgg_layer7_out, filters=num_classes, kernel_size=1, name="fcn8")
-    fcn9 = tf.layers.conv2d_transpose(fcn8, filters=l_4_size, kernel_size=4, strides=(2, 2), padding='SAME', name="fcn9")
-    fcn9_skip = tf.add(fcn9, vgg_layer4_out, name="fcn9_plus_vgg_layer4")
-    fcn10 = tf.layers.conv2d_transpose(fcn9_skip, filters=l_3_size, kernel_size=4, strides=(2, 2), padding='SAME', name="fcn10_conv2d")
-    fcn10_skip = tf.add(fcn10, vgg_layer3_out, name="fcn10_plus_vgg_layer3")
-    fcn11 = tf.layers.conv2d_transpose(fcn10_skip, filters=num_classes, kernel_size=16, strides=(8, 8), padding='SAME', name="fcn11")
+    initializer = tf.contrib.layers.xavier_initializer(uniform=False, dtype=tf.float32)
+    regularizer = tf.contrib.layers.l2_regularizer(scale=0.1)
+
+    fcn8 = tf.layers.conv2d(
+        vgg_layer7_out, 
+        filters=num_classes, 
+        kernel_size=1,
+        kernel_initializer=initializer,
+        kernel_regularizer=regularizer,
+        name="fcn8")
+
+    fcn9 = tf.layers.conv2d_transpose(
+        fcn8, 
+        filters=l4_size, 
+        kernel_size=4, 
+        kernel_initializer=initializer,
+        kernel_regularizer=regularizer,
+        strides=(2, 2), 
+        padding='SAME', 
+        name="fcn9")
+
+    fcn_l4 = tf.layers.conv2d(
+        vgg_layer4_out, 
+        filters=l4_size, 
+        kernel_size=1, 
+        kernel_initializer=initializer,
+        kernel_regularizer=regularizer,
+        name="fcn_l4")
+
+    fcn9_plus_fcn_l4 = tf.add(fcn9, fcn_l4, name="fcn9_plus_fcn_l4")
+
+    fcn10 = tf.layers.conv2d_transpose(
+        fcn9_plus_fcn_l4, 
+        filters=l3_size, 
+        kernel_size=4, 
+        kernel_initializer=initializer,
+        kernel_regularizer=regularizer,
+        strides=(2, 2), 
+        padding='SAME', 
+        name="fcn10")
+
+    fcn_l3 = tf.layers.conv2d(
+        vgg_layer3_out, 
+        filters=l3_size, 
+        kernel_size=1, 
+        kernel_initializer=initializer,
+        kernel_regularizer=regularizer,
+        name="fcn_l3")
+
+    fcn10_plus_fcn_l3 = tf.add(fcn10, fcn_l3, name="fcn10_plus_fcn_l3")
+
+    fcn11 = tf.layers.conv2d_transpose(
+        fcn10_plus_fcn_l3, 
+        filters=num_classes, 
+        kernel_size=16, 
+        kernel_initializer=initializer,
+        kernel_regularizer=regularizer,
+        strides=(8, 8), 
+        padding='SAME', 
+        name="fcn11")
 
     return fcn11
 tests.test_layers(layers)
@@ -81,8 +135,10 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     correct_label = tf.reshape(correct_label, (-1, num_classes))
 
     cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=correct_label[:])
-    loss = tf.reduce_mean(cross_entropy, name="fcn_loss")
-    train_op = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss, name="fcn_train_op")
+    l2_loss = tf.losses.get_regularization_loss()
+    loss = cross_entropy + l2_loss
+    loss_op = tf.reduce_mean(loss, name="fcn_loss")
+    train_op = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_op, name="fcn_train_op")
 
     return logits, train_op, loss
 tests.test_optimize(optimize)
