@@ -81,10 +81,10 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     correct_label = tf.reshape(correct_label, (-1, num_classes))
 
     cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=correct_label[:])
-    loss_op = tf.reduce_mean(cross_entropy, name="fcn_loss")
-    train_op = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_op, name="fcn_train_op")
+    loss = tf.reduce_mean(cross_entropy, name="fcn_loss")
+    train_op = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss, name="fcn_train_op")
 
-    return logits, train_op, loss_op
+    return logits, train_op, loss
 tests.test_optimize(optimize)
 
 
@@ -105,16 +105,12 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     """
     
     for epoch in range(epochs):
-        # Create function to get batches
         total_loss = 0
         for X_batch, gt_batch in get_batches_fn(batch_size):
-            feed_dict = {input_image: X_batch, correct_label: gt_batch, keep_prob: 0.5, learning_rate: 0.01}
+            feed_dict = {input_image: X_batch, correct_label: gt_batch, keep_prob: 0.5, learning_rate: 0.001}
             loss, _ = sess.run([cross_entropy_loss, train_op], feed_dict=feed_dict)
             total_loss += loss
-
-        print("EPOCH {} ...".format(epoch + 1))
-        print("Loss = {:.3f}".format(total_loss))
-        print()
+        print("Epoch: {} --- Total Loss: {:.5f}".format(epoch, total_loss))
 tests.test_train_nn(train_nn)
 
 
@@ -135,10 +131,13 @@ def run():
     learning_rate = tf.placeholder(tf.float32)
     correct_label = tf.placeholder(tf.float32, [None, None, None, num_classes])
     
-    num_epochs = 30
-    batch_size = 64
+    num_epochs = 50
+    batch_size = 8
     
-    with tf.Session() as sess:
+    opts = tf.GPUOptions(allow_growth=True)
+    config = tf.ConfigProto(gpu_options=opts)
+
+    with tf.Session(config=config) as sess:
         # Path to vgg model
         vgg_path = os.path.join(data_dir, 'vgg')
         # Create function to get batches
@@ -148,7 +147,6 @@ def run():
         #  https://datascience.stackexchange.com/questions/5224/how-to-prepare-augment-images-for-neural-network
 
         print("Build NN")
-        # TODO: Build NN using load_vgg, layers, and optimize function
         input_image, keep_prob, layer3, layer4, layer7 = load_vgg(sess, vgg_path)
         model_output = layers(layer3, layer4, layer7, num_classes)
         logits, train_op, cross_entropy_loss = optimize(model_output, correct_label, learning_rate, num_classes)
@@ -158,10 +156,7 @@ def run():
         sess.run(tf.local_variables_initializer())
 
         print("Train NN")
-        # TODO: Train NN using the train_nn function
         train_nn(sess, num_epochs, batch_size, get_batches_fn, train_op, cross_entropy_loss, input_image, correct_label, keep_prob, learning_rate)
-
-        # TODO: Save inference data using helper.save_inference_samples
         helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
 
         # OPTIONAL: Apply the trained model to a video
